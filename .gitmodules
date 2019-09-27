@@ -1,0 +1,9 @@
+[submodule "matlab-stargo"]
+	path = matlab-stargo
+	url = https://github.com/farhi/matlab-stargo
+[submodule "matlab-astrometry"]
+	path = matlab-astrometry
+	url = https://github.com/farhi/matlab-astrometry
+[submodule "matlab-gphoto"]
+	path = matlab-gphoto
+	url = https://github.com/farhi/matlab-gphoto
