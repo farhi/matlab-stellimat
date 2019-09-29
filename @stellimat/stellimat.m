@@ -62,6 +62,16 @@ methods
     % >> condition: astrometry result is not empty (success)
     addlistener(self.astrometry, 'annotationEnd', @(srv,evnt)CallBack_show_real_position(self));
   end % stellimat instantiate
+  
+  function locate(self, img)
+    % LOCATE Determine the RA/DEC coordinates of a given image file
+    if strcmp(self.astrometry.status, 'running')
+      return
+    end
+    disp([ mfilename ': starting annotation of ' img ]);
+    self.private.lastImageFile = img;
+    local(self.astrometry, img); % launch annotation
+  end % locate
 
 end % methods
 
@@ -107,6 +117,7 @@ function CallBack_annotate(self)
     % check date: must be a new image
     if etime(self.camera.lastImageDate,self.private.lastImageDate) < 1, return; end
     disp([ mfilename ': starting annotation of ' fullfile(self.camera.dir, img{1}) ]);
+    self.private.lastImageFile = img{1};
     local(self.astrometry, fullfile(self.camera.dir, img{1})); % launch annotation
   end
 end % CallBack_annotate
@@ -116,9 +127,11 @@ function CallBack_show_real_position(self)
   % >> condition: astrometry result is not empty (success)
   if ~isempty(self.astrometry.result)
     % show real scope RA/DEC coords in mount skychart.
-    disp([ mfilename ': the image RA/DEC location is:' ...
+    disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC location is:' ...
       self.astrometry.result.RA_hms ' ' self.astrometry.result.Dec_dms ]);
     scatter(self.mount, self.astrometry.results.RA, self.astrometry.result.Dec);
+  else
+    disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC annotation FAILED.' ])
   end
   % now may correct for misalignment when mount is idle and option is set.
 end % CallBack_show_real_position
