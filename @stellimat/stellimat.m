@@ -1,79 +1,102 @@
 classdef stellimat < handle
 % STELLIMAT Automatic mount/camera handling for astrophotography.
 
-properties
-  mount       = []; % the mount object,  e.g. stargo, starbook
-  camera      = []; % the camera object, e.g. gphoto, sonyalpha
-  astrometry  = []; % the astrometry object
-  
-  private     = []; % internal stuff. do not touch.
-end %properties
-
-methods
-  function self = stellimat(varargin)  % (..., object, mount_port, camera_port)
-    % start all objects
-    % ------------------------------------------------------------------------------
+  properties
+    mount       = []; % the mount object,  e.g. stargo, starbook
+    camera      = []; % the camera object, e.g. gphoto, sonyalpha
+    astrometry  = []; % the astrometry object
     
-    % first scan input arguments (objects)
-    for index=1:nargin
-      switch class(varargin{index})
-      case {'gphoto','sonyalpha'}
-        self.camera = varargin{index};
-      case {'stargo','starbook'}
-        self.mount  = varargin{index};
-      case {'astrometry'}
-        self.astrometry = varargin{index};
+    private     = []; % internal stuff. do not touch.
+    catalogs    = [];
+  end %properties
+
+  properties (Constant=true)
+    submodules = private_submodules;
+  end % private properties
+
+  methods
+    function self = stellimat(varargin)  % (..., object, mount_port, camera_port)
+      % start all objects
+      % ------------------------------------------------------------------------------
+      
+      % first scan input arguments (objects)
+      for index=1:nargin
+        switch class(varargin{index})
+        case {'gphoto','sonyalpha'}
+          self.camera = varargin{index};
+        case {'stargo','starbook'}
+          self.mount  = varargin{index};
+        case {'astrometry'}
+          self.astrometry = varargin{index};
+        end
       end
-    end
 
-    % camera, with process. could use: sonyalpha.
-    if isempty(self.camera)
-      if exist('gphoto')
-        self.camera     = gphoto; % port
-      elseif exist('sonyalpha')
-        self.camera     = sonyalpha;
+      % camera, with process. could use: sonyalpha.
+      if isempty(self.camera)
+        if exist('gphoto')
+          self.camera     = gphoto; % port
+        elseif exist('sonyalpha')
+          self.camera     = sonyalpha;
+        else
+          disp([ mfilename ': can not find any camera.' ])
+        end
       end
-    end
 
-    % mount, with skychart. could use starbook
-    if isempty(self.mount)
-      if exist('stargo')
-        self.mount      = stargo; % port                           
-      elseif exist('starbook')
-        self.mount      = starbook;
+      % mount, with skychart. could use starbook
+      if isempty(self.mount)
+        if exist('stargo')
+          self.mount      = stargo; % port                           
+        elseif exist('starbook')
+          self.mount      = starbook;
+        else
+          disp([ mfilename ': can not find any mount.' ])
+        end
       end
-    end
+      if ~isempty(self.mount) && isobject(self.mount) && ismethod(self.mount, 'get_catalogs')
+        self.catalogs = get_catalogs(self.mount);
+      end
 
-    % astrometry, using loaded catalogs.
-    if isempty(self.astrometry)
-      self.astrometry = astrometry('/dev/null','catalogs', self.mount.private.skychart.catalogs, ...
-        'scale-low', 0.5, 'scale-high',2); 
-    end
+      % astrometry, using loaded catalogs.
+      if isempty(self.astrometry)
+        if exist('astrometry')
+          if ~isempty(self.catalogs)
+            self.astrometry = astrometry('/dev/null','catalogs', self.catalogs, 'scale-low', 0.5, 'scale-high',2);
+          else
+            self.astrometry = astrometry('/dev/null','scale-low', 0.5, 'scale-high',2);
+          end
+        else
+          disp([ mfilename ': can not find any astrometry tool.' ])
+        end
+      end
+      if isempty(self.catalogs) && ~isempty(self.astrometry) && isobject(self.astrometry) ...
+        && ismethod(self.astrometry, 'get_catalogs')
+        self.catalogs = get_catalogs(self.astrometry);
+      end
+      
+      % actions
+      % -------
+      
+      % when camera has captured an image, trigger astrometry on it
+      % the camera should be e.g. in time-lapse mode: continuous(camera,'on')
+      % >> condition: astrometry must be idle
+      addlistener(self.camera, 'captureStop', @(src,evnt)CallBack_annotate(self));
+      
+      % when astrometry ends, indicate its position on the SkyChart
+      % >> condition: astrometry result is not empty (success)
+      addlistener(self.astrometry, 'annotationEnd', @(srv,evnt)CallBack_show_real_position(self));
+    end % stellimat instantiate
     
-    % actions
-    % -------
-    
-    % when camera has captured an image, trigger astrometry on it
-    % the camera should be e.g. in time-lapse mode: continuous(camera,'on')
-    % >> condition: astrometry must be idle
-    addlistener(self.camera, 'captureStop', @(src,evnt)CallBack_annotate(self));
-    
-    % when astrometry ends, indicate its position on the SkyChart
-    % >> condition: astrometry result is not empty (success)
-    addlistener(self.astrometry, 'annotationEnd', @(srv,evnt)CallBack_show_real_position(self));
-  end % stellimat instantiate
-  
-  function locate(self, img)
-    % LOCATE Determine the RA/DEC coordinates of a given image file
-    if strcmp(self.astrometry.status, 'running')
-      return
-    end
-    disp([ mfilename ': starting annotation of ' img ]);
-    self.private.lastImageFile = img;
-    local(self.astrometry, img); % launch annotation
-  end % locate
+    function locate(self, img)
+      % LOCATE Determine the RA/DEC coordinates of a given image file
+      if strcmp(self.astrometry.status, 'running')
+        return
+      end
+      disp([ mfilename ': starting annotation of ' img ]);
+      self.private.lastImageFile = img;
+      local(self.astrometry, img); % launch annotation
+    end % locate
 
-end % methods
+  end % methods
 
 end % classdef
 % actions
