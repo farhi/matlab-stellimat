@@ -91,10 +91,38 @@ classdef stellimat < handle
       if strcmp(self.astrometry.status, 'running')
         return
       end
-      disp([ mfilename ': starting annotation of ' img ]);
-      self.private.lastImageFile = img;
-      local(self.astrometry, img); % launch annotation
+      if nargin < 2 || isempty(img)
+        capture(self.camera);
+      else
+        disp([ mfilename ': starting annotation of ' img ]);
+        self.private.lastImageFile = img;
+        local(self.astrometry, img); % launch annotation
+      end
     end % locate
+    
+    function st = get_state(self)
+      % GET_STATE get the Stellimat state
+      st = '';
+      objects = {self.camera self.mount self.astrometry};
+      names   = {'Camera','Mount','Astrometry'};
+      for index = 1:numel(objects)
+        o = objects{index};
+        if ~isobject(o) || ~isvalid(o), continue; end
+        val = [];
+        if ismethod(o, 'get_state')
+          val = get_state(o);
+        elseif ismethod(o, 'getstatus')
+          val = getstatus(o);
+        elseif isfield(o, 'status')
+          val = o.status(o);
+        elseif isfield(o, 'state')
+          val = o.state(o);
+        end
+        if isempty(val) continue; end
+        if isnumeric(val) val=num2str(val); end
+        st = [ names{index} ':' val ];
+      end
+    end % get_state
 
   end % methods
 
