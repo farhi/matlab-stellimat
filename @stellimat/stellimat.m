@@ -16,8 +16,10 @@ classdef stellimat < handle
 
   methods
     function self = stellimat(varargin)  % (..., object, mount_port, camera_port)
+      % STELLIMAT Start the StelliMat automatic scope control.   
+    
       % start all objects
-      % ------------------------------------------------------------------------------
+      % ------------------------------------------------------------------------
       
       % first scan input arguments (objects)
       for index=1:nargin
@@ -74,7 +76,7 @@ classdef stellimat < handle
       end
       
       % actions
-      % -------
+      % ------------------------------------------------------------------------
       
       % when camera has captured an image, trigger astrometry on it
       % the camera should be e.g. in time-lapse mode: continuous(camera,'on')
@@ -84,6 +86,8 @@ classdef stellimat < handle
       % when astrometry ends, indicate its position on the SkyChart
       % >> condition: astrometry result is not empty (success)
       addlistener(self.astrometry, 'annotationEnd', @(srv,evnt)CallBack_show_real_position(self));
+      
+      plot(self);
     end % stellimat instantiate
     
     function locate(self, img)
@@ -100,8 +104,13 @@ classdef stellimat < handle
       end
     end % locate
     
+    function plot(self)
+      % PLOT Plot the Mount GUI
+      plot(self.mount);
+    end % plot
+    
     function st = get_state(self)
-      % GET_STATE get the Stellimat state
+      % GET_STATE Get the Stellimat state
       st = '';
       objects = {self.camera self.mount self.astrometry};
       names   = {'Camera','Mount','Astrometry'};
@@ -113,14 +122,12 @@ classdef stellimat < handle
           val = get_state(o);
         elseif ismethod(o, 'getstatus')
           val = getstatus(o);
-        elseif isfield(o, 'status')
-          val = o.status(o);
-        elseif isfield(o, 'state')
-          val = o.state(o);
         end
+        if isempty(val), try; val = o.status; end; end
+        if isempty(val), try; val = o.state;  end; end
         if isempty(val) continue; end
         if isnumeric(val) val=num2str(val); end
-        st = [ names{index} ':' val ];
+        st = [ st names{index} ':' val ' ' ];
       end
     end % get_state
 
@@ -178,9 +185,9 @@ function CallBack_show_real_position(self)
   % >> condition: astrometry result is not empty (success)
   if ~isempty(self.astrometry.result)
     % show real scope RA/DEC coords in mount skychart.
-    disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC location is:' ...
+    disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC location is: ' ...
       self.astrometry.result.RA_hms ' ' self.astrometry.result.Dec_dms ]);
-    scatter(self.mount, self.astrometry.results.RA, self.astrometry.result.Dec);
+    scatter(self.mount, self.astrometry.result.RA, self.astrometry.result.Dec);
   else
     disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC annotation FAILED.' ])
   end
