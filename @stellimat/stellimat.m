@@ -1,5 +1,11 @@
 classdef stellimat < handle
 % STELLIMAT Automatic mount/camera handling for astrophotography.
+%   STELLIMAT Alone will search for a camera and mount to connect to.
+%
+%   STELLIMAT('usb:XX,YY','/dev/ttyUSB0') connects to given gPhoto2 and StarGo ports.
+%
+%   STELLIMAT(gphoto(..), stargo(..)) connects to given gPhoto and mount objects,
+%   which can be given as gphoto, sonyalpha stargo or starbook classes.
 
   properties
     mount       = []; % the mount object,  e.g. stargo, starbook
@@ -30,31 +36,43 @@ classdef stellimat < handle
           self.mount  = varargin{index};
         case {'astrometry'}
           self.astrometry = varargin{index};
+        case 'char'
+          if any(strcmp(strtok(varargin{index},':'),{'serial','usb','ptpip'})) && exist('gphoto')
+            self.camera = gphoto(varargin{index});
+          elseif any(strcmp(strtok(varargin{index},':'),{'http','https','ftp'})) && exist('sonyalpha')
+            self.camera = sonyalpha(varargin{index}); % HTTP could also be a StarBook IP
+          elseif strncmp(varargin{index}, 'sim', 3)
+            self.camera = gphoto('sim');
+            self.mount  = stargo('sim');
+          elseif strncmp(varargin{index}, 'COM', 3) || strncmp(varargin{index}, '/dev/', 5)
+            self.mount  = stargo(varargin{index});
+          end
         end
       end
 
       % camera, with process. could use: sonyalpha.
       if isempty(self.camera)
-        if exist('gphoto')
-          self.camera     = gphoto; % port
-        elseif exist('sonyalpha')
-          self.camera     = sonyalpha;
+        if exist('sonyalpha')
+          self.camera     = sonyalpha; % IP
+        elseif exist('gphoto')
+          self.camera     = gphoto;    % port
         else
-          disp([ mfilename ': can not find any camera.' ])
+          disp([ mfilename ': can not find any camera (gphoto, sonyalpha).' ])
         end
       end
 
       % mount, with skychart. could use starbook
       if isempty(self.mount)
-        if exist('stargo')
-          self.mount      = stargo; % port                           
-        elseif exist('starbook')
+        if exist('starbook')
           self.mount      = starbook;
+        elseif exist('stargo')
+          self.mount      = stargo; % port                           
         else
-          disp([ mfilename ': can not find any mount.' ])
+          disp([ mfilename ': can not find any mount (stargo, starbook).' ])
         end
       end
       if ~isempty(self.mount) && isobject(self.mount) && ismethod(self.mount, 'get_catalogs')
+        plot(self.mount); % display so that we can import the catalogs
         self.catalogs = get_catalogs(self.mount);
       end
 
@@ -92,6 +110,10 @@ classdef stellimat < handle
     
     function locate(self, img)
       % LOCATE Determine the RA/DEC coordinates of a given image file
+      %   LOCATE(s) captures an image from the camera and determines its
+      %   coordinates.
+      %
+      %   LOCATE(s, img) determines the given image coordinates.
       if strcmp(self.astrometry.status, 'running')
         return
       end
@@ -130,6 +152,11 @@ classdef stellimat < handle
         st = [ st names{index} ':' val ' ' ];
       end
     end % get_state
+    
+    function st = getstatus(self)
+      % GETSTATUS Get the Stellimat state
+      st = get_state(self);
+    end % getstatus
 
   end % methods
 
@@ -187,7 +214,20 @@ function CallBack_show_real_position(self)
     % show real scope RA/DEC coords in mount skychart.
     disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC location is: ' ...
       self.astrometry.result.RA_hms ' ' self.astrometry.result.Dec_dms ]);
-    scatter(self.mount, self.astrometry.result.RA, self.astrometry.result.Dec);
+    % plot cross on th StarGo skychart
+    h = findall(0, 'Tag', 'Stellimat_astrometry_stargo');
+    if ~isempty(h), delete(h); end
+    h = scatter(self.mount, self.astrometry.result.RA, self.astrometry.result.Dec);
+    set(h, 'Tag', 'Stellimat_astrometry_stargo');
+    % display annotation on image
+    fig = findall(0, 'Tag','Stellimat_astrometry_fig'); % any previous astrometry plot to replace ?
+    if ~isempty(fig), pos = get(fig, 'Position'); close(fig); else pos = []; end
+    fig = plot(self.astrometry);
+    if ~isempty(pos)
+      set(fig, 'Tag','Stellimat_astrometry_fig', 'Position', pos);
+    else
+      set(fig, 'Tag','Stellimat_astrometry_fig');
+    end
   else
     disp([ mfilename ': the image ' self.private.lastImageFile ' RA/DEC annotation FAILED.' ])
   end
