@@ -114,7 +114,7 @@ classdef stellimat < handle
       %   coordinates.
       %
       %   LOCATE(s, img) determines the given image coordinates.
-      if strcmp(self.astrometry.status, 'running')
+      if strcmpi(self.astrometry.status, 'running')
         return
       end
       if nargin < 2 || isempty(img)
@@ -190,7 +190,7 @@ function CallBack_annotate(self)
   % >> condition: astrometry must be idle
   
   % check astrometry is IDLE
-  if strcmp(self.astrometry.status, 'running')
+  if strcmpi(get_state(self.astrometry), 'running')
     return
   end
   % check camera has produced an image, and its time is more recent that previous
